@@ -3,6 +3,7 @@ import { requireRole } from '@/lib/auth'
 import { getDatabase, logAuditEvent } from '@/lib/db'
 import { config, ensureDirExists } from '@/lib/config'
 import { join, dirname } from 'path'
+import { logger } from '@/lib/logger'
 import { readdirSync, statSync, unlinkSync } from 'fs'
 
 const BACKUP_DIR = join(dirname(config.dbPath), 'backups')
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error: any) {
-    console.error('Backup failed:', error)
+    logger.error({ err: error }, 'Backup failed')
     return NextResponse.json({ error: `Backup failed: ${error.message}` }, { status: 500 })
   }
 }

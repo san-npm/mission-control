@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDatabase, db_helpers } from '@/lib/db'
 import { requireRole } from '@/lib/auth'
+import { logger } from '@/lib/logger'
 
 export interface WorkflowTemplate {
   id: number
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ templates: parsed })
   } catch (error) {
-    console.error('GET /api/workflows error:', error)
+    logger.error({ err: error }, 'GET /api/workflows error')
     return NextResponse.json({ error: 'Failed to fetch templates' }, { status: 500 })
   }
 }
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
       template: { ...template, tags: template.tags ? JSON.parse(template.tags) : [] }
     }, { status: 201 })
   } catch (error) {
-    console.error('POST /api/workflows error:', error)
+    logger.error({ err: error }, 'POST /api/workflows error')
     return NextResponse.json({ error: 'Failed to create template' }, { status: 500 })
   }
 }
@@ -125,7 +126,7 @@ export async function PUT(request: NextRequest) {
     const updated = db.prepare('SELECT * FROM workflow_templates WHERE id = ?').get(id) as WorkflowTemplate
     return NextResponse.json({ template: { ...updated, tags: updated.tags ? JSON.parse(updated.tags) : [] } })
   } catch (error) {
-    console.error('PUT /api/workflows error:', error)
+    logger.error({ err: error }, 'PUT /api/workflows error')
     return NextResponse.json({ error: 'Failed to update template' }, { status: 500 })
   }
 }
@@ -150,7 +151,7 @@ export async function DELETE(request: NextRequest) {
     db.prepare('DELETE FROM workflow_templates WHERE id = ?').run(parseInt(id))
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('DELETE /api/workflows error:', error)
+    logger.error({ err: error }, 'DELETE /api/workflows error')
     return NextResponse.json({ error: 'Failed to delete template' }, { status: 500 })
   }
 }

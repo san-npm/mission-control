@@ -1,21 +1,20 @@
-import { randomBytes, timingSafeEqual } from 'crypto'
+import { randomBytes, timingSafeEqual, createHmac } from 'crypto'
 import { getDatabase } from './db'
 import { hashPassword, verifyPassword } from './password'
 
 /**
  * Constant-time string comparison to prevent timing attacks.
+ * Uses HMAC to normalize both inputs to fixed-length hashes,
+ * eliminating any length-based timing leak.
  */
 export function safeCompare(a: string, b: string): boolean {
   if (typeof a !== 'string' || typeof b !== 'string') return false
-  const bufA = Buffer.from(a)
-  const bufB = Buffer.from(b)
-  if (bufA.length !== bufB.length) {
-    // Still do a constant-time comparison to avoid timing leak on length mismatch.
-    // Compare bufA against itself (always true) but return false.
-    timingSafeEqual(bufA, bufA)
-    return false
-  }
-  return timingSafeEqual(bufA, bufB)
+  // HMAC both values with a fixed key to produce equal-length digests.
+  // This makes comparison fully constant-time regardless of input lengths.
+  const key = 'safe-compare-key'
+  const hashA = createHmac('sha256', key).update(a).digest()
+  const hashB = createHmac('sha256', key).update(b).digest()
+  return timingSafeEqual(hashA, hashB)
 }
 
 export interface User {
