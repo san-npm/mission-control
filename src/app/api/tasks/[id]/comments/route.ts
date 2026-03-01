@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase, Comment, db_helpers } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/tasks/[id]/comments - Get all comments for a task
@@ -72,7 +73,7 @@ export async function GET(
       total: comments.length
     });
   } catch (error) {
-    console.error(`GET /api/tasks/[id]/comments error:`, error);
+    logger.error({ err: error }, 'GET /api/tasks/[id]/comments error');
     return NextResponse.json({ error: 'Failed to fetch comments' }, { status: 500 });
   }
 }
@@ -199,7 +200,7 @@ export async function POST(
       }
     }, { status: 201 });
   } catch (error) {
-    console.error(`POST /api/tasks/[id]/comments error:`, error);
+    logger.error({ err: error }, 'POST /api/tasks/[id]/comments error');
     return NextResponse.json({ error: 'Failed to add comment' }, { status: 500 });
   }
 }

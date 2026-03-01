@@ -8,10 +8,11 @@ const nextConfig = {
     const googleEnabled = !!(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID)
 
     const isDev = process.env.NODE_ENV !== 'production'
+    // CSP is set dynamically in middleware.ts with per-request nonces.
+    // These are fallback headers for static assets not processed by middleware.
     const csp = [
       `default-src 'self'`,
-      // unsafe-inline needed for Next.js inline scripts; nonce-based CSP requires custom server setup
-      `script-src 'self' 'unsafe-inline'${googleEnabled ? ' https://accounts.google.com' : ''}`,
+      `script-src 'self'${googleEnabled ? ' https://accounts.google.com' : ''}`,
       `style-src 'self' 'unsafe-inline'`,
       `connect-src 'self' wss:${isDev ? ' ws: http://127.0.0.1:* http://localhost:*' : ''}`,
       `img-src 'self' data: blob:${googleEnabled ? ' https://*.googleusercontent.com https://lh3.googleusercontent.com' : ''}`,

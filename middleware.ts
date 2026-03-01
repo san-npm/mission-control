@@ -55,6 +55,29 @@ function hostMatches(pattern: string, hostname: string): boolean {
   return h === p
 }
 
+function generateNonce(): string {
+  const array = new Uint8Array(16)
+  crypto.getRandomValues(array)
+  // Base64 encode
+  let binary = ''
+  for (const byte of array) binary += String.fromCharCode(byte)
+  return btoa(binary)
+}
+
+function buildCspHeader(nonce: string): string {
+  const googleEnabled = !!(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID)
+  const isDev = process.env.NODE_ENV !== 'production'
+  return [
+    `default-src 'self'`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${googleEnabled ? ' https://accounts.google.com' : ''}`,
+    `style-src 'self' 'unsafe-inline'`,
+    `connect-src 'self' wss:${isDev ? ' ws: http://127.0.0.1:* http://localhost:*' : ''}`,
+    `img-src 'self' data: blob:${googleEnabled ? ' https://*.googleusercontent.com https://lh3.googleusercontent.com' : ''}`,
+    `font-src 'self' data:`,
+    `frame-src 'self'${googleEnabled ? ' https://accounts.google.com' : ''}`,
+  ].join('; ')
+}
+
 export function middleware(request: NextRequest) {
   // Network access control.
   // In production: default-deny unless explicitly allowed.
@@ -88,9 +111,23 @@ export function middleware(request: NextRequest) {
     }
   }
 
+  // Generate a CSP nonce for page responses
+  const nonce = generateNonce()
+  const cspHeader = buildCspHeader(nonce)
+
+  // Helper to attach CSP + nonce headers to a response
+  function withCsp(response: NextResponse): NextResponse {
+    response.headers.set('Content-Security-Policy', cspHeader)
+    response.headers.set('x-nonce', nonce)
+    return response
+  }
+
   // Allow login page and auth API without session
   if (pathname === '/login' || pathname.startsWith('/api/auth/')) {
-    return NextResponse.next()
+    const requestHeaders = new Headers(request.headers)
+    requestHeaders.set('x-nonce', nonce)
+    const response = NextResponse.next({ request: { headers: requestHeaders } })
+    return withCsp(response)
   }
 
   // Check for session cookie
@@ -109,7 +146,10 @@ export function middleware(request: NextRequest) {
 
   // Page routes: redirect to login if no session
   if (sessionToken) {
-    return NextResponse.next()
+    const requestHeaders = new Headers(request.headers)
+    requestHeaders.set('x-nonce', nonce)
+    const response = NextResponse.next({ request: { headers: requestHeaders } })
+    return withCsp(response)
   }
 
   // Redirect to login

@@ -3,6 +3,7 @@ import { getDatabase } from '@/lib/db'
 import { requireRole } from '@/lib/auth'
 import { createHmac } from 'crypto'
 import { lookup } from 'dns/promises'
+import { logger } from '@/lib/logger'
 
 /**
  * POST /api/webhooks/test - Send a test event to a webhook
@@ -112,7 +113,7 @@ export async function POST(request: NextRequest) {
       duration_ms: durationMs,
     })
   } catch (error) {
-    console.error('POST /api/webhooks/test error:', error)
+    logger.error({ err: error }, 'POST /api/webhooks/test error')
     return NextResponse.json({ error: 'Failed to test webhook' }, { status: 500 })
   }
 }

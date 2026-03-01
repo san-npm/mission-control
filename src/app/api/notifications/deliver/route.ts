@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase, Notification, db_helpers } from '@/lib/db';
 import { runOpenClaw } from '@/lib/command';
 import { requireRole } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 
 /**
  * POST /api/notifications/deliver - Notification delivery daemon endpoint
@@ -145,7 +146,7 @@ export async function POST(request: NextRequest) {
           error: error.message
         });
         
-        console.error(`Failed to deliver notification ${notification.id} to ${notification.recipient}:`, error);
+        logger.error({ err: error, notificationId: notification.id, recipient: notification.recipient }, 'Failed to deliver notification');
       }
     }
     
@@ -176,7 +177,7 @@ export async function POST(request: NextRequest) {
       error_details: errors
     });
   } catch (error) {
-    console.error('POST /api/notifications/deliver error:', error);
+    logger.error({ err: error }, 'POST /api/notifications/deliver error');
     return NextResponse.json({ error: 'Failed to deliver notifications' }, { status: 500 });
   }
 }
@@ -253,7 +254,7 @@ export async function GET(request: NextRequest) {
       agent_filter: agent
     });
   } catch (error) {
-    console.error('GET /api/notifications/deliver error:', error);
+    logger.error({ err: error }, 'GET /api/notifications/deliver error');
     return NextResponse.json({ error: 'Failed to get delivery status' }, { status: 500 });
   }
 }
