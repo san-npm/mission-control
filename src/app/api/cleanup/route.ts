@@ -151,12 +151,27 @@ export async function POST(request: NextRequest) {
   })
 }
 
+/**
+ * Retention targets are hardcoded — table and column names MUST NOT come from user input.
+ * They are interpolated into SQL because better-sqlite3 doesn't support parameterized identifiers.
+ * This allowlist ensures only known-safe identifiers are ever used.
+ */
+const ALLOWED_TABLES = new Set(['activities', 'audit_log', 'notifications', 'pipeline_runs'])
+const ALLOWED_COLUMNS = new Set(['created_at'])
+
 function getRetentionTargets() {
   const ret = config.retention
-  return [
+  const targets = [
     { table: 'activities', column: 'created_at', days: ret.activities, label: 'Activities' },
     { table: 'audit_log', column: 'created_at', days: ret.auditLog, label: 'Audit Log' },
     { table: 'notifications', column: 'created_at', days: ret.notifications, label: 'Notifications' },
     { table: 'pipeline_runs', column: 'created_at', days: ret.pipelineRuns, label: 'Pipeline Runs' },
   ]
+  // Defense-in-depth: assert all identifiers are in the allowlist
+  for (const t of targets) {
+    if (!ALLOWED_TABLES.has(t.table) || !ALLOWED_COLUMNS.has(t.column)) {
+      throw new Error(`Invalid retention target: ${t.table}.${t.column}`)
+    }
+  }
+  return targets
 }
