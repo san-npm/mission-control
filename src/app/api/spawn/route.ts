@@ -89,17 +89,22 @@ export async function POST(request: NextRequest) {
 
     } catch (execError: any) {
       logger.error({ err: execError }, 'Spawn execution error')
-      
+
+      const isNotFound = execError.code === 'ENOENT' || (execError.message && execError.message.includes('ENOENT'))
+      const errorMessage = isNotFound
+        ? `Agent binary not found. Ensure "${config.clawdbotBin}" is installed and in PATH.`
+        : execError.message || 'Failed to spawn agent'
+
       return NextResponse.json({
         success: false,
         spawnId,
-        error: execError.message || 'Failed to spawn agent',
+        error: errorMessage,
         task,
         model,
         label,
         timeoutSeconds: timeout,
         createdAt: Date.now()
-      }, { status: 500 })
+      }, { status: isNotFound ? 503 : 500 })
     }
 
   } catch (error) {

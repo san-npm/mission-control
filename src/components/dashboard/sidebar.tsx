@@ -32,9 +32,9 @@ export function Sidebar() {
   useEffect(() => {
     // Fetch system status
     fetch('/api/status?action=overview')
-      .then(res => res.json())
-      .then(data => setSystemStats(data))
-      .catch(err => console.error('Failed to fetch system status:', err))
+      .then(res => res.ok ? res.json() : null)
+      .then(data => { if (data) setSystemStats(data) })
+      .catch(() => {})
   }, [])
 
   const activeSessions = sessions.filter(s => s.active).length

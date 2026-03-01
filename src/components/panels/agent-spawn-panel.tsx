@@ -68,7 +68,7 @@ export function AgentSpawnPanel() {
 
       const result = await response.json()
 
-      if (result.success) {
+      if (response.ok && result.success) {
         // Update the spawn request with success
         updateSpawnRequest(spawnId, {
           status: 'running',
@@ -85,8 +85,10 @@ export function AgentSpawnPanel() {
 
         // Refresh history
         const historyResponse = await fetch('/api/spawn')
-        const historyData = await historyResponse.json()
-        setSpawnHistory(historyData.history || [])
+        if (historyResponse.ok) {
+          const historyData = await historyResponse.json()
+          setSpawnHistory(historyData.history || [])
+        }
       } else {
         // Update with error
         updateSpawnRequest(spawnId, {

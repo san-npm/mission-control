@@ -38,6 +38,7 @@ export function MemoryBrowserPanel() {
     setIsLoading(true)
     try {
       const response = await fetch('/api/memory?action=tree')
+      if (!response.ok) { setMemoryFiles([]); return }
       const data = await response.json()
       setMemoryFiles(data.tree || [])
 
@@ -72,14 +73,14 @@ export function MemoryBrowserPanel() {
     setIsLoading(true)
     try {
       const response = await fetch(`/api/memory?action=content&path=${encodeURIComponent(filePath)}`)
-      const data = await response.json()
-      
-      if (data.content !== undefined) {
-        setSelectedMemoryFile(filePath)
-        setMemoryContent(data.content)
-      } else {
-        alert(data.error || 'Failed to load file content')
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}))
+        alert(errData.error || 'Failed to load file content')
+        return
       }
+      const data = await response.json()
+      setSelectedMemoryFile(filePath)
+      setMemoryContent(data.content ?? '')
     } catch (error) {
       console.error('Failed to load file content:', error)
       alert('Network error occurred')
@@ -94,6 +95,7 @@ export function MemoryBrowserPanel() {
     setIsSearching(true)
     try {
       const response = await fetch(`/api/memory?action=search&query=${encodeURIComponent(searchQuery)}`)
+      if (!response.ok) { setSearchResults([]); return }
       const data = await response.json()
       setSearchResults(data.results || [])
     } catch (error) {

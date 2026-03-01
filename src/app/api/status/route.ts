@@ -184,33 +184,49 @@ async function getSystemStatus() {
   }
 
   try {
-    // System uptime
-    const { stdout: uptimeOutput } = await runCommand('uptime', ['-s'], {
-      timeoutMs: 3000
-    })
-    const bootTime = new Date(uptimeOutput.trim())
-    status.uptime = Date.now() - bootTime.getTime()
+    // System uptime — platform-aware
+    if (process.platform === 'darwin') {
+      const { stdout } = await runCommand('sysctl', ['-n', 'kern.boottime'], { timeoutMs: 3000 })
+      const match = stdout.match(/sec\s*=\s*(\d+)/)
+      if (match) status.uptime = Date.now() - parseInt(match[1]) * 1000
+    } else {
+      const { stdout } = await runCommand('uptime', ['-s'], { timeoutMs: 3000 })
+      const bootTime = new Date(stdout.trim())
+      status.uptime = Date.now() - bootTime.getTime()
+    }
   } catch (error) {
-    logger.error({ err: error }, 'Error getting uptime')
+    // uptime not available — leave as 0
   }
 
   try {
-    // Memory info
-    const { stdout: memOutput } = await runCommand('free', ['-m'], {
-      timeoutMs: 3000
-    })
-    const memLines = memOutput.split('\n')
-    const memLine = memLines.find(line => line.startsWith('Mem:'))
-    if (memLine) {
-      const parts = memLine.split(/\s+/)
-      status.memory = {
-        total: parseInt(parts[1]) || 0,
-        used: parseInt(parts[2]) || 0,
-        available: parseInt(parts[6]) || 0
+    // Memory info — platform-aware
+    if (process.platform === 'darwin') {
+      const { stdout: pageSize } = await runCommand('sysctl', ['-n', 'hw.pagesize'], { timeoutMs: 3000 })
+      const { stdout: memSize } = await runCommand('sysctl', ['-n', 'hw.memsize'], { timeoutMs: 3000 })
+      const { stdout: vmStat } = await runCommand('vm_stat', [], { timeoutMs: 3000 })
+      const ps = parseInt(pageSize.trim()) || 4096
+      const totalBytes = parseInt(memSize.trim()) || 0
+      const freeMatch = vmStat.match(/Pages free:\s+(\d+)/)
+      const inactiveMatch = vmStat.match(/Pages inactive:\s+(\d+)/)
+      const freePages = parseInt(freeMatch?.[1] || '0')
+      const inactivePages = parseInt(inactiveMatch?.[1] || '0')
+      const totalMB = Math.round(totalBytes / 1048576)
+      const availableMB = Math.round((freePages + inactivePages) * ps / 1048576)
+      status.memory = { total: totalMB, used: totalMB - availableMB, available: availableMB }
+    } else {
+      const { stdout: memOutput } = await runCommand('free', ['-m'], { timeoutMs: 3000 })
+      const memLine = memOutput.split('\n').find(line => line.startsWith('Mem:'))
+      if (memLine) {
+        const parts = memLine.split(/\s+/)
+        status.memory = {
+          total: parseInt(parts[1]) || 0,
+          used: parseInt(parts[2]) || 0,
+          available: parseInt(parts[6]) || 0
+        }
       }
     }
   } catch (error) {
-    logger.error({ err: error }, 'Error getting memory info')
+    // memory info not available — leave as 0
   }
 
   try {
@@ -229,7 +245,7 @@ async function getSystemStatus() {
       }
     }
   } catch (error) {
-    logger.error({ err: error }, 'Error getting disk info')
+    // disk info not available — leave as 0
   }
 
   try {
@@ -404,13 +420,14 @@ async function performHealthCheck() {
 
   // Check disk space
   try {
-    const { stdout } = await runCommand('df', ['/', '--output=pcent'], {
-      timeoutMs: 3000
-    })
-    const lines = stdout.trim().split('\n')
-    const last = lines[lines.length - 1] || ''
-    const usagePercent = parseInt(last.replace('%', '').trim() || '0')
-    
+    const { stdout } = await runCommand('df', ['-h', '/'], { timeoutMs: 3000 })
+    const lastLine = stdout.trim().split('\n').pop() || ''
+    const parts = lastLine.split(/\s+/)
+    // macOS: Filesystem Size Used Avail Capacity ...
+    // Linux: Filesystem Size Used Avail Use% ...
+    const capacityStr = parts.find(p => p.endsWith('%')) || '0%'
+    const usagePercent = parseInt(capacityStr.replace('%', '')) || 0
+
     health.checks.push({
       name: 'Disk Space',
       status: usagePercent < 90 ? 'healthy' : usagePercent < 95 ? 'warning' : 'critical',
@@ -426,13 +443,19 @@ async function performHealthCheck() {
 
   // Check memory usage
   try {
-    const { stdout } = await runCommand('free', ['-m'], { timeoutMs: 3000 })
-    const lines = stdout.split('\n')
-    const memLine = lines.find((line) => line.startsWith('Mem:'))
-    const parts = (memLine || '').split(/\s+/)
-    const total = parseInt(parts[1] || '0')
-    const available = parseInt(parts[6] || '0')
-    const usagePercent = Math.round(((total - available) / total) * 100)
+    let usagePercent = 0
+    if (process.platform === 'darwin') {
+      const totalMem = require('os').totalmem()
+      const freeMem = require('os').freemem()
+      usagePercent = Math.round(((totalMem - freeMem) / totalMem) * 100)
+    } else {
+      const { stdout } = await runCommand('free', ['-m'], { timeoutMs: 3000 })
+      const memLine = stdout.split('\n').find((line: string) => line.startsWith('Mem:'))
+      const parts = (memLine || '').split(/\s+/)
+      const total = parseInt(parts[1] || '0')
+      const available = parseInt(parts[6] || '0')
+      usagePercent = total > 0 ? Math.round(((total - available) / total) * 100) : 0
+    }
 
     health.checks.push({
       name: 'Memory Usage',

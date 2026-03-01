@@ -17,6 +17,7 @@ export function SessionDetailsPanel() {
   const loadSessions = useCallback(async () => {
     try {
       const response = await fetch('/api/sessions')
+      if (!response.ok) return
       const data = await response.json()
       setSessions(data.sessions || data)
     } catch (error) {
