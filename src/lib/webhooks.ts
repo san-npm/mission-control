@@ -1,6 +1,43 @@
 import { createHmac } from 'crypto'
+import { lookup } from 'dns/promises'
 import { eventBus, type ServerEvent } from './event-bus'
 import { logger } from './logger'
+
+/** Block webhooks to private/internal IP ranges to prevent SSRF */
+function isPrivateIP(ip: string): boolean {
+  // IPv4 private ranges
+  if (/^127\./.test(ip)) return true
+  if (/^10\./.test(ip)) return true
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return true
+  if (/^192\.168\./.test(ip)) return true
+  if (/^169\.254\./.test(ip)) return true
+  if (ip === '0.0.0.0') return true
+  // IPv6 loopback / link-local
+  if (ip === '::1' || ip === '::' || ip.startsWith('fe80:') || ip.startsWith('fc00:') || ip.startsWith('fd')) return true
+  return false
+}
+
+async function validateWebhookUrl(url: string): Promise<void> {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    throw new Error('Invalid webhook URL')
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new Error('Webhook URL must use http or https')
+  }
+  // Resolve hostname and check for private IPs
+  try {
+    const { address } = await lookup(parsed.hostname)
+    if (isPrivateIP(address)) {
+      throw new Error('Webhook URL resolves to a private IP address')
+    }
+  } catch (err: any) {
+    if (err.message.includes('private IP')) throw err
+    throw new Error(`Cannot resolve webhook hostname: ${parsed.hostname}`)
+  }
+}
 
 interface Webhook {
   id: number
@@ -101,6 +138,14 @@ async function deliverWebhook(
   eventType: string,
   payload: Record<string, any>
 ) {
+  // Validate URL to prevent SSRF to internal networks
+  try {
+    await validateWebhookUrl(webhook.url)
+  } catch (err: any) {
+    logger.warn({ webhookId: webhook.id, url: webhook.url, err: err.message }, 'Webhook URL blocked by SSRF check')
+    return
+  }
+
   const body = JSON.stringify({
     event: eventType,
     timestamp: Math.floor(Date.now() / 1000),

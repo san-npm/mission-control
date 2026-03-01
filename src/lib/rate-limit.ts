@@ -25,7 +25,12 @@ export function createRateLimiter(options: RateLimiterOptions) {
   if (cleanupInterval.unref) cleanupInterval.unref()
 
   return function checkRateLimit(request: Request): NextResponse | null {
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+    // Use the last (rightmost) IP from x-forwarded-for, which is the one added by our trusted proxy.
+    // The leftmost IP can be spoofed by the client.
+    const forwardedFor = request.headers.get('x-forwarded-for')
+    const ip = forwardedFor
+      ? forwardedFor.split(',').map(s => s.trim()).filter(Boolean).pop() || 'unknown'
+      : 'unknown'
     const now = Date.now()
     const entry = store.get(ip)
 

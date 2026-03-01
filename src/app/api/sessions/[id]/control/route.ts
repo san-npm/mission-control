@@ -36,10 +36,13 @@ export async function POST(
       )
     }
 
+    // Double-check: session ID regex already validated above, but ensure no double-quotes
+    // can be injected into the command string
+    const safeId = id.replace(/"/g, '')
     let result
     if (action === 'terminate') {
       result = await runClawdbot(
-        ['-c', `sessions_kill("${id}")`],
+        ['-c', `sessions_kill("${safeId}")`],
         { timeoutMs: 10000 }
       )
     } else {
@@ -47,7 +50,7 @@ export async function POST(
         ? JSON.stringify({ type: 'control', action: 'monitor' })
         : JSON.stringify({ type: 'control', action: 'pause' })
       result = await runClawdbot(
-        ['-c', `sessions_send("${id}", ${JSON.stringify(message)})`],
+        ['-c', `sessions_send("${safeId}", ${JSON.stringify(message)})`],
         { timeoutMs: 10000 }
       )
     }

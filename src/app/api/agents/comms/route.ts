@@ -14,8 +14,8 @@ export async function GET(request: NextRequest) {
     const db = getDatabase()
     const { searchParams } = new URL(request.url)
 
-    const limit = parseInt(searchParams.get("limit") || "100")
-    const offset = parseInt(searchParams.get("offset") || "0")
+    const limit = Math.min(parseInt(searchParams.get("limit") || "100"), 500)
+    const offset = Math.max(parseInt(searchParams.get("offset") || "0"), 0)
     const since = searchParams.get("since")
     const agent = searchParams.get("agent")
 

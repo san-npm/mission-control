@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { readFile, readdir, stat } from 'fs/promises'
+import { readFile, readdir, stat, lstat } from 'fs/promises'
 import { join } from 'path'
 import { config } from '@/lib/config'
 import { requireRole } from '@/lib/auth'
@@ -133,8 +133,8 @@ async function discoverLogFiles(): Promise<Array<{ path: string; source: string 
           path: join(LOGS_PATH, entry.name),
           source: entry.name.replace('.log', ''),
         })
-      } else if (entry.isDirectory()) {
-        // Scan subdirectories (e.g., automation/)
+      } else if (entry.isDirectory() && !entry.isSymbolicLink()) {
+        // Scan subdirectories (e.g., automation/) but skip symlinks to prevent path traversal
         try {
           const subEntries = await readdir(join(LOGS_PATH, entry.name))
           for (const subFile of subEntries) {

@@ -98,8 +98,8 @@ export async function GET(request: NextRequest) {
     } catch { /* table might not exist */ }
   }
 
-  // Search audit log
-  if (!typeFilter || typeFilter === 'audit') {
+  // Search audit log - requires admin to prevent sensitive detail exposure
+  if ((!typeFilter || typeFilter === 'audit') && auth.user && auth.user.role === 'admin') {
     try {
       const audits = db.prepare(`
         SELECT id, action, actor, detail, created_at

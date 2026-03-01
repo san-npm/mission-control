@@ -85,14 +85,22 @@ export async function PATCH(request: NextRequest) {
     }
 
     const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
+
+    let newSessionToken: string | undefined
     if (updates.password) {
+      // Invalidate all existing sessions after password change for security
+      const { destroyAllUserSessions, createSession } = await import('@/lib/auth')
+      destroyAllUserSessions(user.id)
+      // Create a fresh session so the current user stays logged in
+      const session = createSession(user.id, ipAddress, request.headers.get('user-agent') || undefined)
+      newSessionToken = session.token
       logAuditEvent({ action: 'password_change', actor: user.username, actor_id: user.id, ip_address: ipAddress })
     }
     if (updates.display_name) {
       logAuditEvent({ action: 'profile_update', actor: user.username, actor_id: user.id, detail: { display_name: updates.display_name }, ip_address: ipAddress })
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       user: {
         id: updated.id,
@@ -104,6 +112,21 @@ export async function PATCH(request: NextRequest) {
         avatar_url: updated.avatar_url || null,
       },
     })
+
+    // Set new session cookie if sessions were invalidated
+    if (newSessionToken) {
+      const secure = process.env.MC_COOKIE_SECURE === '1' || process.env.NODE_ENV === 'production'
+      const sameSite = (process.env.MC_COOKIE_SAMESITE || 'strict') as 'strict' | 'lax' | 'none'
+      response.cookies.set('mc-session', newSessionToken, {
+        httpOnly: true,
+        secure,
+        sameSite,
+        path: '/',
+        maxAge: 7 * 24 * 60 * 60,
+      })
+    }
+
+    return response
   } catch (error) {
     console.error('PATCH /api/auth/me error:', error)
     return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })

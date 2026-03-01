@@ -1,16 +1,22 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-/** Edge-compatible constant-time string comparison. */
+/** Edge-compatible constant-time string comparison. Pads to equal length to avoid timing leak. */
 function safeCompare(a: string, b: string): boolean {
   if (typeof a !== 'string' || typeof b !== 'string') return false
   const encoder = new TextEncoder()
   const bufA = encoder.encode(a)
   const bufB = encoder.encode(b)
-  if (bufA.length !== bufB.length) return false
-  let result = 0
-  for (let i = 0; i < bufA.length; i++) {
-    result |= bufA[i] ^ bufB[i]
+  const maxLen = Math.max(bufA.length, bufB.length)
+  if (maxLen === 0) return false
+  // Pad both to equal length to prevent length-based timing leaks
+  const padA = new Uint8Array(maxLen)
+  const padB = new Uint8Array(maxLen)
+  padA.set(bufA)
+  padB.set(bufB)
+  let result = bufA.length ^ bufB.length
+  for (let i = 0; i < maxLen; i++) {
+    result |= padA[i] ^ padB[i]
   }
   return result === 0
 }
@@ -93,7 +99,8 @@ export function middleware(request: NextRequest) {
   // API routes: accept session cookie OR API key
   if (pathname.startsWith('/api/')) {
     const apiKey = request.headers.get('x-api-key')
-    if (sessionToken || (apiKey && safeCompare(apiKey, process.env.API_KEY || ''))) {
+    const configuredKey = process.env.API_KEY || ''
+    if (sessionToken || (apiKey && configuredKey.length >= 16 && safeCompare(apiKey, configuredKey))) {
       return NextResponse.next()
     }
 

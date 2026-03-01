@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDatabase } from '@/lib/db'
 import { requireRole } from '@/lib/auth'
 import { createHmac } from 'crypto'
+import { lookup } from 'dns/promises'
 
 /**
  * POST /api/webhooks/test - Send a test event to a webhook
@@ -21,6 +22,23 @@ export async function POST(request: NextRequest) {
     const webhook = db.prepare('SELECT * FROM webhooks WHERE id = ?').get(id) as any
     if (!webhook) {
       return NextResponse.json({ error: 'Webhook not found' }, { status: 404 })
+    }
+
+    // SSRF check: validate webhook URL doesn't point to internal networks
+    try {
+      const parsed = new URL(webhook.url)
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        return NextResponse.json({ error: 'Webhook URL must use http or https' }, { status: 400 })
+      }
+      const { address } = await lookup(parsed.hostname)
+      if (/^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|0\.0\.0\.0)/.test(address) || address === '::1') {
+        return NextResponse.json({ error: 'Webhook URL resolves to a private IP address' }, { status: 400 })
+      }
+    } catch (dnsErr: any) {
+      if (dnsErr.message?.includes('private IP')) {
+        return NextResponse.json({ error: dnsErr.message }, { status: 400 })
+      }
+      return NextResponse.json({ error: `Cannot resolve webhook hostname` }, { status: 400 })
     }
 
     const body = JSON.stringify({

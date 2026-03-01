@@ -101,9 +101,17 @@ export async function PUT(request: NextRequest) {
   }
 }
 
+/** Dangerous keys that must never be set via dot-notation to prevent prototype pollution */
+const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+
 /** Set a value in a nested object using dot-notation path */
 function setNestedValue(obj: any, path: string, value: any) {
   const keys = path.split('.')
+  for (const key of keys) {
+    if (FORBIDDEN_KEYS.has(key)) {
+      throw new Error(`Forbidden key in path: ${key}`)
+    }
+  }
   let current = obj
   for (let i = 0; i < keys.length - 1; i++) {
     if (current[keys[i]] === undefined) current[keys[i]] = {}

@@ -245,7 +245,8 @@ async function getSystemStatus() {
         const parts = line.trim().split(/\s+/)
         return {
           pid: parts[0],
-          command: parts.slice(2).join(' ')
+          // Only expose the process name, not the full command-line (which may contain secrets)
+          command: parts[1] || 'unknown'
         }
       })
       .filter((proc) => /clawdbot|openclaw/i.test(proc.command))

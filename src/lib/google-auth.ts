@@ -14,8 +14,9 @@ export async function verifyGoogleIdToken(idToken: string): Promise<GoogleIdToke
     throw new Error('Missing Google credential')
   }
 
+  // Use the v3 tokeninfo endpoint (oauth2/v3) which is the current Google recommendation
   const url = `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(token)}`
-  const res = await fetch(url, { method: 'GET' })
+  const res = await fetch(url)
   if (!res.ok) {
     throw new Error('Invalid Google token')
   }

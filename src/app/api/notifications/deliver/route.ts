@@ -18,9 +18,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       agent_filter, // Optional: only deliver to specific agent
-      limit = 50,   // Max notifications to process per call
+      limit: rawLimit = 50,   // Max notifications to process per call
       dry_run = false // Test mode - don't actually deliver
     } = body;
+    const limit = Math.min(Math.max(1, parseInt(rawLimit) || 50), 200);
     
     // Get undelivered notifications
     let query = `
