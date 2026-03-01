@@ -11,6 +11,9 @@ interface RateLimiterOptions {
   message?: string
 }
 
+// Track intervals for cleanup during HMR to prevent leaks in development
+const _hmrIntervals: NodeJS.Timeout[] = (globalThis as any).__rateLimitIntervals ??= []
+
 export function createRateLimiter(options: RateLimiterOptions) {
   const store = new Map<string, RateLimitEntry>()
 
@@ -23,6 +26,8 @@ export function createRateLimiter(options: RateLimiterOptions) {
   }, 60_000)
   // Don't prevent process exit
   if (cleanupInterval.unref) cleanupInterval.unref()
+  // Track for HMR cleanup
+  _hmrIntervals.push(cleanupInterval)
 
   return function checkRateLimit(request: Request): NextResponse | null {
     // Use the last (rightmost) IP from x-forwarded-for, which is the one added by our trusted proxy.
@@ -67,3 +72,11 @@ export const heavyLimiter = createRateLimiter({
   maxRequests: 10,
   message: 'Too many requests for this resource. Please try again later.',
 })
+
+// Clean up stale intervals on HMR module reload (dev only)
+if ((module as any).hot) {
+  (module as any).hot.dispose(() => {
+    for (const interval of _hmrIntervals) clearInterval(interval)
+    _hmrIntervals.length = 0
+  })
+}

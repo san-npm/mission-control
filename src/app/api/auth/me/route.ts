@@ -1,28 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getUserFromRequest, updateUser , requireRole } from '@/lib/auth'
+import { getUserFromRequest, updateUser, requireRole } from '@/lib/auth'
 import { logAuditEvent } from '@/lib/db'
 import { verifyPassword } from '@/lib/password'
 import { logger } from '@/lib/logger'
 
 export async function GET(request: Request) {
+  // requireRole already calls getUserFromRequest internally and returns the user
   const auth = requireRole(request, 'viewer')
   if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
-  const user = getUserFromRequest(request)
-
-  if (!user) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-  }
-
   return NextResponse.json({
     user: {
-      id: user.id,
-      username: user.username,
-      display_name: user.display_name,
-      role: user.role,
-      provider: user.provider || 'local',
-      email: user.email || null,
-      avatar_url: user.avatar_url || null,
+      id: auth.user.id,
+      username: auth.user.username,
+      display_name: auth.user.display_name,
+      role: auth.user.role,
+      provider: auth.user.provider || 'local',
+      email: auth.user.email || null,
+      avatar_url: auth.user.avatar_url || null,
     },
   })
 }

@@ -3,12 +3,20 @@
 import { useCallback, useRef, useEffect } from 'react'
 import { useMissionControl } from '@/store'
 
+// Dev-only logging helper — no-ops in production to keep console clean
+const isDev = process.env.NODE_ENV === 'development'
+const devLog = (...args: any[]) => { if (isDev) console.log(...args) }
+const devWarn = (...args: any[]) => { if (isDev) console.warn(...args) }
+const devError = (...args: any[]) => { if (isDev) console.error(...args) }
+
 // Gateway protocol version (v3 required by OpenClaw 2026.x)
 const PROTOCOL_VERSION = 3
 
 // Heartbeat configuration
 const PING_INTERVAL_MS = 30_000
 const MAX_MISSED_PONGS = 3
+// Maximum inbound message size (1MB) to prevent memory exhaustion from malicious gateway
+const MAX_MESSAGE_SIZE = 1_048_576
 
 // Gateway message types
 interface GatewayFrame {
@@ -74,7 +82,7 @@ export function useWebSocket() {
 
       // Check missed pongs
       if (missedPongsRef.current >= MAX_MISSED_PONGS) {
-        console.warn(`Missed ${MAX_MISSED_PONGS} pongs, triggering reconnect`)
+        devWarn(`Missed ${MAX_MISSED_PONGS} pongs, triggering reconnect`)
         addLog({
           id: `heartbeat-${Date.now()}`,
           timestamp: Date.now(),
@@ -150,7 +158,7 @@ export function useWebSocket() {
           : undefined
       }
     }
-    console.log('Sending connect handshake:', connectRequest)
+    devLog('Sending connect handshake:', connectRequest)
     ws.send(JSON.stringify(connectRequest))
   }, [])
 
@@ -158,10 +166,7 @@ export function useWebSocket() {
   const handleGatewayMessage = useCallback((message: GatewayMessage) => {
     setLastMessage(message)
 
-    // Debug logging for development
-    if (process.env.NODE_ENV === 'development') {
-      console.log('WebSocket message received:', message.type, message)
-    }
+    devLog('WebSocket message received:', message.type, message)
 
     switch (message.type) {
       case 'session_update':
@@ -230,24 +235,24 @@ export function useWebSocket() {
         break
 
       default:
-        console.log('Unknown gateway message type:', message.type)
+        devLog('Unknown gateway message type:', message.type)
     }
   }, [setLastMessage, setSessions, addLog, updateSpawnRequest, setCronJobs, addTokenUsage])
 
   // Handle gateway protocol frames
   const handleGatewayFrame = useCallback((frame: GatewayFrame, ws: WebSocket) => {
-    console.log('Gateway frame:', frame)
+    devLog('Gateway frame:', frame)
 
     // Handle connect challenge
     if (frame.type === 'event' && frame.event === 'connect.challenge') {
-      console.log('Received connect challenge, sending handshake...')
+      devLog('Received connect challenge, sending handshake...')
       sendConnectHandshake(ws, frame.payload?.nonce)
       return
     }
 
     // Handle connect response (handshake success)
     if (frame.type === 'res' && frame.ok && !handshakeCompleteRef.current) {
-      console.log('Handshake complete!')
+      devLog('Handshake complete!')
       handshakeCompleteRef.current = true
       setConnection({
         isConnected: true,
@@ -267,7 +272,7 @@ export function useWebSocket() {
 
     // Handle connect error
     if (frame.type === 'res' && !frame.ok) {
-      console.error('Gateway error:', frame.error)
+      devError('Gateway error:', frame.error)
       addLog({
         id: `error-${Date.now()}`,
         timestamp: Date.now(),
@@ -378,22 +383,34 @@ export function useWebSocket() {
       wsRef.current = ws
 
       ws.onopen = () => {
-        console.log('WebSocket connected to', url.split('?')[0])
+        devLog('WebSocket connected to', url.split('?')[0])
         // Don't set isConnected yet - wait for handshake
         setConnection({
           url: url.split('?')[0],
           reconnectAttempts: 0
         })
         // Wait for connect.challenge from server
-        console.log('Waiting for connect challenge...')
+        devLog('Waiting for connect challenge...')
       }
 
       ws.onmessage = (event) => {
         try {
-          const frame = JSON.parse(event.data) as GatewayFrame
+          // Guard against oversized messages that could exhaust browser memory
+          const raw = typeof event.data === 'string' ? event.data : ''
+          if (raw.length > MAX_MESSAGE_SIZE) {
+            addLog({
+              id: `oversized-${Date.now()}`,
+              timestamp: Date.now(),
+              level: 'warn',
+              source: 'websocket',
+              message: `Dropped oversized message (${(raw.length / 1024).toFixed(0)}KB > ${MAX_MESSAGE_SIZE / 1024}KB limit)`
+            })
+            return
+          }
+          const frame = JSON.parse(raw) as GatewayFrame
           handleGatewayFrame(frame, ws)
         } catch (error) {
-          console.error('Failed to parse WebSocket message:', error)
+          devError('Failed to parse WebSocket message:', error)
           addLog({
             id: `raw-${Date.now()}`,
             timestamp: Date.now(),
@@ -405,7 +422,7 @@ export function useWebSocket() {
       }
 
       ws.onclose = (event) => {
-        console.log('Disconnected from Gateway:', event.code, event.reason)
+        devLog('Disconnected from Gateway:', event.code, event.reason)
         setConnection({ isConnected: false })
         handshakeCompleteRef.current = false
         stopHeartbeat()
@@ -413,14 +430,14 @@ export function useWebSocket() {
         // Auto-reconnect logic with exponential backoff
         if (connection.reconnectAttempts < maxReconnectAttempts) {
           const timeout = Math.min(Math.pow(2, connection.reconnectAttempts) * 1000, 30000)
-          console.log(`Reconnecting in ${timeout}ms... (attempt ${connection.reconnectAttempts + 1}/${maxReconnectAttempts})`)
+          devLog(`Reconnecting in ${timeout}ms... (attempt ${connection.reconnectAttempts + 1}/${maxReconnectAttempts})`)
 
           reconnectTimeoutRef.current = setTimeout(() => {
             setConnection({ reconnectAttempts: connection.reconnectAttempts + 1 })
             connect(url, authTokenRef.current)
           }, timeout)
         } else {
-          console.error('Max reconnection attempts reached.')
+          devError('Max reconnection attempts reached.')
           addLog({
             id: `error-${Date.now()}`,
             timestamp: Date.now(),
@@ -432,7 +449,7 @@ export function useWebSocket() {
       }
 
       ws.onerror = (error) => {
-        console.error('WebSocket error:', error)
+        devError('WebSocket error:', error)
         addLog({
           id: `error-${Date.now()}`,
           timestamp: Date.now(),
@@ -443,7 +460,7 @@ export function useWebSocket() {
       }
 
     } catch (error) {
-      console.error('Failed to connect to WebSocket:', error)
+      devError('Failed to connect to WebSocket:', error)
       setConnection({ isConnected: false })
     }
   }, [connection.reconnectAttempts, setConnection, handleGatewayFrame, addLog, stopHeartbeat])
