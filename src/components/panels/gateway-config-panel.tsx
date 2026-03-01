@@ -28,7 +28,7 @@ export function GatewayConfigPanel() {
         setError('Admin access required')
         return
       }
-      if (res.status === 404) {
+      if (res.status === 404 || res.status === 503) {
         const data = await res.json()
         setError(data.error || 'Config not found')
         return

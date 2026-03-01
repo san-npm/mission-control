@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
 
   const configPath = getConfigPath()
   if (!configPath) {
-    return NextResponse.json({ error: 'OPENCLAW_HOME not configured' }, { status: 404 })
+    return NextResponse.json({ error: 'OPENCLAW_HOME not configured. Set the OPENCLAW_HOME environment variable.' }, { status: 503 })
   }
 
   try {
@@ -55,7 +55,7 @@ export async function PUT(request: NextRequest) {
 
   const configPath = getConfigPath()
   if (!configPath) {
-    return NextResponse.json({ error: 'OPENCLAW_HOME not configured' }, { status: 404 })
+    return NextResponse.json({ error: 'OPENCLAW_HOME not configured. Set the OPENCLAW_HOME environment variable.' }, { status: 503 })
   }
 
   const body = await request.json().catch(() => null)
