@@ -3,6 +3,9 @@ node_modules
 .data
 .next
 .env
+.env.*
+.env.test
+.env.local
 *.md
 .github
 ops

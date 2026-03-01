@@ -10,6 +10,8 @@ export function safeCompare(a: string, b: string): boolean {
   const bufA = Buffer.from(a)
   const bufB = Buffer.from(b)
   if (bufA.length !== bufB.length) {
+    // Still do a constant-time comparison to avoid timing leak on length mismatch.
+    // Compare bufA against itself (always true) but return false.
     timingSafeEqual(bufA, bufA)
     return false
   }
@@ -216,7 +218,8 @@ export function getUserFromRequest(request: Request): User | null {
 
   // Check API key - return synthetic user
   const apiKey = request.headers.get('x-api-key')
-  if (apiKey && safeCompare(apiKey, process.env.API_KEY || '')) {
+  const configuredKey = process.env.API_KEY || ''
+  if (apiKey && configuredKey.length >= 16 && safeCompare(apiKey, configuredKey)) {
     return {
       id: 0,
       username: 'api',

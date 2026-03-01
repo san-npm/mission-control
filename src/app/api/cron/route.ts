@@ -304,6 +304,22 @@ export async function POST(request: NextRequest) {
         )
       }
 
+      // Basic cron expression validation: 5 or 6 space-separated fields
+      const cronParts = schedule.trim().split(/\s+/)
+      if (cronParts.length < 5 || cronParts.length > 6) {
+        return NextResponse.json(
+          { error: 'Invalid cron expression: must have 5 or 6 fields' },
+          { status: 400 }
+        )
+      }
+      // Reject obviously invalid characters
+      if (!/^[0-9*,\-\/LW#? a-zA-Z]+$/.test(schedule)) {
+        return NextResponse.json(
+          { error: 'Invalid characters in cron expression' },
+          { status: 400 }
+        )
+      }
+
       const cronFile = loadCronFile() || { version: 1, jobs: [] }
 
       const newJob: OpenClawCronJob = {

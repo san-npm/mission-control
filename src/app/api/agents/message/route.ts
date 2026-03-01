@@ -9,7 +9,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const from = (body.from || 'system') as string
+    // Use authenticated user identity instead of trusting user-supplied 'from' field
+    const from = auth.user.username
     const to = (body.to || '').trim()
     const message = (body.message || '').trim()
 

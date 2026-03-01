@@ -25,6 +25,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Validate inputs don't contain control characters that could break command parsing
+    const SAFE_INPUT_RE = /^[\x20-\x7E\s]+$/
+    if (!SAFE_INPUT_RE.test(task) || !SAFE_INPUT_RE.test(model) || !SAFE_INPUT_RE.test(label)) {
+      return NextResponse.json(
+        { error: 'Invalid characters in task, model, or label' },
+        { status: 400 }
+      )
+    }
+
     // Validate timeout
     const timeout = parseInt(timeoutSeconds) || 300
     if (timeout < 10 || timeout > 3600) {

@@ -7,11 +7,13 @@ const nextConfig = {
   async headers() {
     const googleEnabled = !!(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID)
 
+    const isDev = process.env.NODE_ENV !== 'production'
     const csp = [
       `default-src 'self'`,
+      // unsafe-inline needed for Next.js inline scripts; nonce-based CSP requires custom server setup
       `script-src 'self' 'unsafe-inline'${googleEnabled ? ' https://accounts.google.com' : ''}`,
       `style-src 'self' 'unsafe-inline'`,
-      `connect-src 'self' ws: wss: http://127.0.0.1:* http://localhost:*`,
+      `connect-src 'self' wss:${isDev ? ' ws: http://127.0.0.1:* http://localhost:*' : ''}`,
       `img-src 'self' data: blob:${googleEnabled ? ' https://*.googleusercontent.com https://lh3.googleusercontent.com' : ''}`,
       `font-src 'self' data:`,
       `frame-src 'self'${googleEnabled ? ' https://accounts.google.com' : ''}`,

@@ -30,9 +30,9 @@ export async function GET(request: NextRequest) {
       })
       .sort((a, b) => b.created_at - a.created_at)
 
-    return NextResponse.json({ backups: files, dir: BACKUP_DIR })
+    return NextResponse.json({ backups: files })
   } catch {
-    return NextResponse.json({ backups: [], dir: BACKUP_DIR })
+    return NextResponse.json({ backups: [] })
   }
 }
 
@@ -91,7 +91,7 @@ export async function DELETE(request: NextRequest) {
   try { body = await request.json() } catch { return NextResponse.json({ error: 'Request body required' }, { status: 400 }) }
   const name = body.name
 
-  if (!name || !name.endsWith('.db') || name.includes('/') || name.includes('..')) {
+  if (!name || !name.endsWith('.db') || name.includes('/') || name.includes('\\') || name.includes('..')) {
     return NextResponse.json({ error: 'Invalid backup name' }, { status: 400 })
   }
 
